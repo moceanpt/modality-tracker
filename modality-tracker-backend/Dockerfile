@@ -1,29 +1,37 @@
-# ───────── Stage 1: build  ─────────
+###############################
+#  Stage 1 – build container  #
+###############################
 FROM node:20-alpine AS build
 WORKDIR /app
 
-# ① copy manifests & install *all* deps (incl. dev) to compile TypeScript
-COPY package*.json tsconfig.json ./
+# 1️⃣  install **all** dependencies (prod + dev)
+COPY package*.json ./
 RUN npm ci
 
-# ② copy source, run tsc → dist/
-COPY src ./src
-RUN npm run build         # generates dist/index.js
+# 2️⃣  copy Prisma schema and generate the client
+COPY prisma ./prisma
+RUN npx prisma generate           # ➜ creates node_modules/@prisma
 
-# ───────── Stage 2: runtime  ─────────
+# 3️⃣  copy the source and compile TypeScript → dist/
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build                 # tsc -p tsconfig.json
+
+###############################
+#  Stage 2 – runtime image    #
+###############################
 FROM node:20-alpine
 WORKDIR /app
+ENV NODE_ENV=production
 
-# ③ only copy production deps to keep the image tiny
+# 4️⃣  install **production-only** dependencies
 COPY package*.json ./
-RUN npm ci --omit=dev      # ← this drops ts-node-dev, @types/*, …
+RUN npm ci --omit=dev
 
-# ④ copy compiled output & Prisma artifacts
-COPY --from=build /app/dist        ./dist
-COPY prisma ./prisma
-RUN npx prisma generate            # Prisma client for runtime
+# 5️⃣  copy compiled output, prisma bits, and binaries
+COPY --from=build /app/dist   ./dist
+COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 
-# ⑤ expose and start
-ENV PORT=3002
 EXPOSE 3002
 CMD ["node", "dist/index.js"]
