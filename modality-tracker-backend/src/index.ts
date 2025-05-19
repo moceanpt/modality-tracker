@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { PrismaClient, Status, StepStatus, Mode } from '@prisma/client';
 import { Server } from 'socket.io';
-import { v4 as uuid } from 'uuid';
+import planRoutes from "./routes/plan";
 
 /* ───────── static config ───────── */
 const TIMER: Record<string, { MT: number; OP: number }> = {
@@ -20,7 +20,14 @@ const TIMER: Record<string, { MT: number; OP: number }> = {
 
 const app = Fastify({ logger: true });
 const prisma = new PrismaClient();
-app.register(cors, { origin: '*' });
+app.register(cors, {
+  origin: true,                 // echoes whatever Origin the browser sends
+  methods: ['GET', 'POST', 'OPTIONS'],
+  preflightContinue: false
+});
+
+/* --- REST routes --- */
+app.register(planRoutes, { prefix: '/' });
 
 declare module 'fastify' { interface FastifyInstance { io: Server } }
 app.decorate('io', null as any);
@@ -105,46 +112,6 @@ async function getTodayPlans() {
   }));
 }
 
-/* ───────── REST ───────── */
-app.post('/client', async (req, rep) => {
-  const { firstName } = req.body as { firstName: string };
-
-  const lastInitial = '_';                           // fixed placeholder
-  const client = await prisma.client.upsert({
-    where : { firstName_lastInitial: { firstName, lastInitial } },
-    update: {},                                      // reuse if it already exists
-    create: { id: uuid(), firstName, lastInitial },  // otherwise create
-  });
-
-  rep.send({ clientId: client.id });
-});
-
-app.post('/plan', async (req, rep) => {
-  const { clientId, optimizations, mode } = req.body as {
-    clientId:string; optimizations:string[]; mode:'MT'|'OP'|'UNSPEC';
-  };
-
-  /* one session / day / client */
-  const session = await prisma.session.upsert({
-    where : { clientId_date: { clientId, date: today00() } },
-    update: { mode },
-    create: { id: uuid(), clientId, date: today00(), mode },
-  });
-
-  /* add steps (no duplicates thanks to @@unique) */
-  for (const name of optimizations) {
-    const mod = await prisma.modality.findFirst({ where:{ name } });
-    if (!mod) continue;
-    await prisma.sessionStep.upsert({
-      where : { sessionId_modalityId: { sessionId: session.id, modalityId: mod.id } },
-      update: {},
-      create: { id: uuid(), sessionId:session.id, modalityId:mod.id, duration:0, status:StepStatus.PENDING },
-    });
-  }
-
-  app.io.emit('plan:list', await getTodayPlans());
-  rep.send({ ok:true });
-});
 
 /* ───────── boot ───────── */
 const PORT = Number(process.env.PORT ?? 3002);

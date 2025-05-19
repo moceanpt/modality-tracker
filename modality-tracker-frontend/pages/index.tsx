@@ -5,7 +5,7 @@ import { io } from 'socket.io-client';
 /* socket */
 const socket = io(
   process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3002",
-  { transports: ["websocket"] }
+  // let Socket-IO pick polling → ws automatically
 );
 
 /* REST-API helper */
