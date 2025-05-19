@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "rootDir": "src",          // <– your backend code lives here
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+
+  /* keep ONLY the files/folders you want compiled */
+  "include": [
+    "src/**/*",
+  ],
+
+  /* explicitly ignore the frontend folder (and node_modules by default) */
+  "exclude": [
+    "../modality-tracker-frontend",   // path to your frontend
+    "node_modules"
+  ]
+}

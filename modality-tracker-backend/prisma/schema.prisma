@@ -1,0 +1,108 @@
+////////////////////////////////////////////////////////////
+//  Prisma schema for the MOCEAN optimisation tracker
+////////////////////////////////////////////////////////////
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+////////////////////////////////////////////////////////////
+//  Global enums
+////////////////////////////////////////////////////////////
+
+enum Status {
+  AVAILABLE
+  IN_USE
+}
+
+enum StepStatus {
+  PENDING
+  ACTIVE
+  DONE
+}
+
+enum Mode {           
+  MT
+  OP
+  UNSPEC             
+}
+
+////////////////////////////////////////////////////////////
+//  Core domain models
+////////////////////////////////////////////////////////////
+
+model Modality {
+  id              String        @id @default(uuid())
+  name            String        @unique
+  defaultDuration Int
+
+  // Relations
+  stations     Station[]
+  sessionSteps SessionStep[]
+}
+
+model Client {
+  id          String @id @default(uuid())
+  firstName   String
+  lastInitial String
+
+  sessions Session[]
+
+  @@unique([firstName, lastInitial], name: "firstName_lastInitial")
+}
+
+model Session {
+  id       String   @id @default(uuid())
+  date     DateTime
+
+  mode     Mode      @default(UNSPEC)
+  
+  clientId String
+  client   Client   @relation(fields: [clientId], references: [id])
+
+  steps SessionStep[]
+
+  @@unique([clientId, date], name: "clientId_date")      // ← required
+}
+
+model Station {
+  id           String   @id @default(uuid())
+  category     String
+  index        Int
+  label        String
+  status       Status
+
+  modalityId   String?
+  modality     Modality? @relation(fields: [modalityId], references: [id])
+
+  sessionSteps SessionStep[]
+
+  @@unique([category, index], name: "category_index")
+}
+
+model SessionStep {
+  id         String   @id @default(uuid())
+
+  // Foreign keys
+  sessionId  String
+  stationId  String?                               // ← make optional
+  modalityId String
+
+  // Timing
+  startAt    DateTime?
+  endAt      DateTime?
+  duration   Int
+  status     StepStatus @default(PENDING)
+
+  // Relations
+  session  Session  @relation(fields: [sessionId], references: [id])
+  station  Station? @relation(fields: [stationId], references: [id])
+  modality Modality @relation(fields: [modalityId], references: [id])
+
+  @@unique([sessionId, modalityId], name: "sessionId_modalityId") // ← required
+}
