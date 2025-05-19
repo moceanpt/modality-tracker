@@ -26,7 +26,7 @@ const app    = Fastify({ logger: true });
 const prisma = new PrismaClient();
 
 /* ── CORS for every REST request ────────────────────────────────────────── */
-await app.register(cors, {
+app.register(cors, {
   origin : FRONT_ORIGIN,                  // <<< exact origin
   methods: ['GET', 'POST', 'HEAD', 'OPTIONS']
 });
