@@ -1,9 +1,13 @@
 //  backend/src/index.ts  – Phase-1 (A–D)
 import Fastify from 'fastify';
-import cors from '@fastify/cors';
+import cors    from '@fastify/cors';
 import { PrismaClient, Status, StepStatus, Mode } from '@prisma/client';
 import { Server } from 'socket.io';
-import planRoutes from "./routes/plan";
+import planRoutes from './routes/plan';
+
+/* ───────── front-end origin (change only if your FE URL changes) ───────── */
+const FRONT_ORIGIN = 'https://modality-tracker-frontend.onrender.com';
+
 
 /* ───────── static config ───────── */
 const TIMER: Record<string, { MT: number; OP: number }> = {
@@ -18,13 +22,18 @@ const TIMER: Record<string, { MT: number; OP: number }> = {
   STRESS:                { MT: 15, OP: 25 },
 };
 
-const app = Fastify({ logger: true });
+const app    = Fastify({ logger: true });
 const prisma = new PrismaClient();
-app.register(cors, {
-  origin: true,                 // echoes whatever Origin the browser sends
-  methods: ['GET', 'POST', 'OPTIONS'],
-  preflightContinue: false
+
+/* ── CORS for every REST request ────────────────────────────────────────── */
+await app.register(cors, {
+  origin : FRONT_ORIGIN,                  // <<< exact origin
+  methods: ['GET', 'POST', 'HEAD', 'OPTIONS']
 });
+
+/* ── tiny health-check so Render stops getting 404 on “/” ──────────────── */
+app.head('/', (_, reply) => reply.code(204).send());
+app.get ('/', (_, reply) => reply.send({ ok: true }));
 
 /* --- REST routes --- */
 app.register(planRoutes, { prefix: '/' });
@@ -114,12 +123,16 @@ async function getTodayPlans() {
 
 
 /* ───────── boot ───────── */
-const PORT = Number(process.env.PORT ?? 3002);
+const PORT = Number(process.env.PORT ?? 10000);
 app.listen({ port:PORT, host:'0.0.0.0' }, err => {
   if (err) { app.log.error(err); process.exit(1); }
   app.log.info(`🚀 backend http://localhost:${PORT}`);
 
-  const io = new Server(app.server,{ cors:{ origin:'*' } });
+  /* Web-Sockets must use the same CORS policy */
+  const io = new Server(app.server, {
+    cors: { origin: FRONT_ORIGIN, methods: ['GET', 'POST'] }
+  });
+
   app.io = io;
 
   io.on('connection', socket => {
