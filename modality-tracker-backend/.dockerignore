@@ -1,6 +1,6 @@
+# modality-tracker-backend/.dockerignore
 node_modules
+dist               # (optional – add if you create a dist folder locally)
 npm-debug.log
 Dockerfile
-**/*.ts
-**/*.tsx
 .vscode
