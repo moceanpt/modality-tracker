@@ -3,7 +3,13 @@ import { useEffect, useState, useMemo } from 'react';
 import { io } from 'socket.io-client';
 
 /* socket */
-const socket = io('http://localhost:3002', { transports:['websocket'] });
+const socket = io(
+  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3002",
+  { transports: ["websocket"] }
+);
+
+/* REST-API helper */
+const API = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3002";
 
 /* helpers */
 const pad =(n:number)=>n.toString().padStart(2,'0');
@@ -166,14 +172,14 @@ const firstWaitingClientId = (mod: string, want: 'MT' | 'OP') => {
   const disabled = !first.trim() || opts.length === 0;
   async function submitPlan() {
     // ➊ create / upsert client (lastInitial = '')
-    const { clientId } = await fetch('http://localhost:3002/client', {
+    const { clientId } = await fetch(`${API}/client`, {
       method : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body   : JSON.stringify({ firstName: first.trim(), lastInitial: '' })
     }).then(r => r.json());
   
     // ➋ create today’s plan
-    await fetch('http://localhost:3002/plan', {
+    await fetch(`${API}/plan`, {
       method : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body   : JSON.stringify({ clientId, optimizations: opts, mode })
