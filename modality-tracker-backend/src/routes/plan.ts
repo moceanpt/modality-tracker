@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { PrismaClient, StepStatus } from '@prisma/client';
+import { today00 }                 from '../utils/dates';
 import { v4 as uuid } from 'uuid';
 
 const prisma = new PrismaClient();
@@ -30,14 +31,22 @@ export default async function planRoutes(app: FastifyInstance) {
     const { clientId, optimizations } = req.body as { clientId: string; optimizations: string[] };
 
     // One session per day per client
-    const todayISO = new Date().toISOString().slice(0, 10);       // e.g. 2025-05-17
-    const today    = new Date(todayISO);
+    const today = today00();      
 
-    const session = await prisma.session.upsert({
-      where : { clientId_date: { clientId, date: todayISO } },    // add a composite @unique if desired
-      update: {},
-      create: { id: uuid(), clientId, date: today },
-    });
+const session = await prisma.session.upsert({
+  where: {
+    clientId_date: {
+      clientId,
+      date: today        // <-- use the Date object
+    }
+  },
+  update: {},
+  create: {
+    id: uuid(),
+    clientId,
+    date: today          // keep identical value
+  },
+});
 
     // Insert a SessionStep (PENDING) for each requested optimization
     for (const modName of optimizations) {
@@ -68,8 +77,7 @@ export default async function planRoutes(app: FastifyInstance) {
 
 /* helper: gather all sessions for today, shape them for the UI */
 async function getTodayPlans() {
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const today    = new Date(todayISO);
+  const today = today00();  
 
   const sessions = await prisma.session.findMany({
     where: { date: today },
