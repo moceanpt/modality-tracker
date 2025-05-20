@@ -198,7 +198,9 @@ const firstWaitingClientId = (mod: string, want: 'MT' | 'OP') => {
       <div className="flex flex-col ipad:flex-row h-screen">
 
 {/* ───────────────── main grid ───────────────── */}
-<main className="flex-1 overflow-y-auto p-4 ipad:p-6">
+<main className="flex-1 h-dvh overflow-y-auto overscroll-contain p-4 ipad:p-6">
+
+
 <div className="space-y-8">
   {/* ---- header ---- */}
   <header className="flex items-center justify-between">
