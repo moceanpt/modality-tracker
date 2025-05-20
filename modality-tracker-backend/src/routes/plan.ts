@@ -26,33 +26,52 @@ export default async function planRoutes(app: FastifyInstance) {
     });
   });
 
-  /* 2️⃣  Create today’s optimization plan */
-  app.post('/plan', async (req, rep) => {
-        const { clientId, optimizations, mode } =
-          req.body as {
-            clientId: string;
-            optimizations: string[];
-            mode: 'MT' | 'OP' | 'UNSPEC';          // ← comes from the intake form
-          };
+/* 2️⃣  Create today’s optimization plan */
+app.post('/plan', async (req, rep) => {
+  const { clientId, optimizations, mode } =
+    req.body as {
+      clientId: string;
+      optimizations: string[];
+      mode: 'MT' | 'OP' | 'UNSPEC';
+    };
 
-    // One session per day per client
-    const today = today00();      
+  const today = today00();   // one session per client per day
 
-    const session = await prisma.session.upsert({
-      where: {
-        clientId_date: {
-          clientId,
-          date: today,          // give Prisma the Date object
-        },
-      },
-      update: { mode },         // update session if it already exists
-      create: {                 // or create a new one for today
-        id: uuid(),
-        clientId,
-        date: today,
-        mode,
-      },
+  /* ── everything inside one atomic transaction ────────── */
+  await prisma.$transaction(async (tx) => {
+    const session = await tx.session.upsert({
+      where : { clientId_date: { clientId, date: today } },
+      update: { mode },
+      create: { id: uuid(), clientId, date: today, mode },
     });
+
+    for (const modName of optimizations) {
+      const modality = await tx.modality.findFirst({ where: { name: modName } });
+      if (!modality) continue;                        // skip unknown names
+
+      await tx.sessionStep.upsert({
+        where  : { sessionId_modalityId: { sessionId: session.id, modalityId: modality.id } },
+        update : {},
+        create : {
+          id        : uuid(),
+          sessionId : session.id,
+          modalityId: modality.id,
+          duration  : 0,
+          status    : StepStatus.PENDING,
+        },
+      });
+    }
+  });
+  /* ────────────────────────────────────────────────────── */
+
+  // --- notify sockets & reply ---
+  const plans = await getTodayPlans();
+  app.io.emit('plan:list', plans);               // full refresh
+  const me = plans.find(p => p.id === clientId); // single-client patch
+  if (me) app.io.emit('plan:update', me);
+
+  rep.send({ ok: true });
+});
 
     // Insert a SessionStep (PENDING) for each requested optimization
     for (const modName of optimizations) {
@@ -64,9 +83,9 @@ export default async function planRoutes(app: FastifyInstance) {
         update: {},
         create: {
           id        : uuid(),
-          sessionId : '',
+          sessionId : session.id,
           modalityId: modality.id,
-          stationId : '',                     // will be filled when tech starts
+          
           duration  : 0,
           status    : StepStatus.PENDING,
         },
