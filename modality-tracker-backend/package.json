@@ -22,14 +22,15 @@
     "@prisma/client": "^6.7.0",
     "fastify": "^5.3.2",
     "socket.io": "^4.8.1",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "ts-node": "^10.9.2"
   },
   "devDependencies": {
     "@types/node": "^22.15.14",
     "@types/socket.io": "^3.0.1",
     "concurrently": "^9.1.2",
     "prisma": "^6.7.0",
-    "ts-node": "^10.9.2",
+    
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.8.3"
   }
