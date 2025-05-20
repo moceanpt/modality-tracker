@@ -76,7 +76,8 @@ export default async function planRoutes(app: FastifyInstance) {
     // Send the latest plan list to all clients
     const plans = await getTodayPlans();
     app.io.emit('plan:list', plans);
-
+    const me = plans.find(p => p.id === clientId); 
+    if (me) app.io.emit('plan:update', me);
     rep.send({ ok: true });
   });
 }
