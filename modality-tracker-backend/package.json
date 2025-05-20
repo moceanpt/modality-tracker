@@ -2,15 +2,16 @@
   "name": "modality-tracker-backend",
   "version": "1.0.0",
   "prisma": {
-   "seed": "ts-node prisma/seed.ts"
- },
+    // run with ts-node’s ESM loader (works in Node ≥18)
+    "seed": "node --loader ts-node/esm prisma/seed.ts"
+  },
   "main": "index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "prisma:migrate": "prisma migrate dev",
-    "seed": "ts-node prisma/seed.ts",
+    "seed": "npm run prisma:seed", 
     "prisma:generate": "prisma generate"
   },
   "keywords": [],
