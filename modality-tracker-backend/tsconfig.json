@@ -3,14 +3,12 @@
     "target": "es2020",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "rootDir": "src",          // <– your backend code lives here
+    "rootDir": "src",
     "outDir": "dist",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-
-  /* keep ONLY the files/folders you want compiled */
-"include": ["src/**/*"],
-"exclude": ["../modality-tracker-frontend", "node_modules"]
+  "include": ["src/**/*"],
+  "exclude": ["../modality-tracker-frontend", "node_modules"]
 }
