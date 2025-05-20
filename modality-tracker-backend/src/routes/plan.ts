@@ -28,25 +28,31 @@ export default async function planRoutes(app: FastifyInstance) {
 
   /* 2️⃣  Create today’s optimization plan */
   app.post('/plan', async (req, rep) => {
-    const { clientId, optimizations } = req.body as { clientId: string; optimizations: string[] };
+        const { clientId, optimizations, mode } =
+          req.body as {
+            clientId: string;
+            optimizations: string[];
+            mode: 'MT' | 'OP' | 'UNSPEC';          // ← comes from the intake form
+          };
 
     // One session per day per client
     const today = today00();      
 
-const session = await prisma.session.upsert({
-  where: {
-    clientId_date: {
-      clientId,
-      date: today        // <-- use the Date object
-    }
-  },
-  update: {},
-  create: {
-    id: uuid(),
-    clientId,
-    date: today          // keep identical value
-  },
-});
+    const session = await prisma.session.upsert({
+      where: {
+        clientId_date: {
+          clientId,
+          date: today,          // give Prisma the Date object
+        },
+      },
+      update: { mode },         // update session if it already exists
+      create: {                 // or create a new one for today
+        id: uuid(),
+        clientId,
+        date: today,
+        mode,
+      },
+    });
 
     // Insert a SessionStep (PENDING) for each requested optimization
     for (const modName of optimizations) {
@@ -90,6 +96,7 @@ async function getTodayPlans() {
   return sessions.map(s => ({
     id   : s.client.id,
     name : `${s.client.firstName} ${s.client.lastInitial}.`,
+    mode : s.mode,
     steps: s.steps.map(st => ({
       modality: st.modality.name,
       status  : st.status,
