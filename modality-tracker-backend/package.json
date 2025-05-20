@@ -2,7 +2,6 @@
   "name": "modality-tracker-backend",
   "version": "1.0.0",
 
-  /* ─── Prisma will call this during `prisma db seed` ─── */
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"
   },
@@ -10,31 +9,29 @@
   "main": "dist/index.js",
 
   "scripts": {
-    "dev"             : "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build"           : "tsc -p tsconfig.json",
-    "start"           : "node dist/index.js",
-    "prisma:migrate"  : "prisma migrate dev",
-    "prisma:generate" : "prisma generate",
-
-    /* manual run: `npm run seed` */
-    "seed"            : "ts-node --transpile-only prisma/seed.ts"
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:generate": "prisma generate",
+    "seed": "ts-node --transpile-only prisma/seed.ts"
   },
 
   "dependencies": {
-    "@fastify/cors"   : "^11.0.1",
-    "@prisma/client"  : "^6.7.0",
-    "fastify"         : "^5.3.2",
-    "socket.io"       : "^4.8.1",
-    "uuid"            : "^11.1.0",
-    "ts-node"         : "^10.9.2"     // ← stays here (runtime seed dep)
+    "@fastify/cors": "^11.0.1",
+    "@prisma/client": "^6.7.0",
+    "fastify": "^5.3.2",
+    "socket.io": "^4.8.1",
+    "uuid": "^11.1.0",
+    "ts-node": "^10.9.2"
   },
 
   "devDependencies": {
-    "@types/node"     : "^22.15.14",
+    "@types/node": "^22.15.14",
     "@types/socket.io": "^3.0.1",
-    "concurrently"    : "^9.1.2",
-    "prisma"          : "^6.7.0",
-    "ts-node-dev"     : "^2.0.0",
-    "typescript"      : "^5.8.3"
+    "concurrently": "^9.1.2",
+    "prisma": "^6.7.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
   }
 }
