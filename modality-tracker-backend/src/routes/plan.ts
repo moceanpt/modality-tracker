@@ -64,7 +64,7 @@ export default async function planRoutes(app: FastifyInstance) {
         update: {},
         create: {
           id        : uuid(),
-          sessionId : session.id,
+          sessionId : '',
           modalityId: modality.id,
           stationId : '',                     // will be filled when tech starts
           duration  : 0,
