@@ -3,8 +3,8 @@
   "version": "1.0.0",
 
   "prisma": {
-    "seed": "ts-node -P prisma/tsconfig.seed.json prisma/seed.ts"
-  },
+  "seed": "ts-node -P prisma/tsconfig.seed.json prisma/seed.ts"
+},
 
   "main": "dist/index.js",
 
