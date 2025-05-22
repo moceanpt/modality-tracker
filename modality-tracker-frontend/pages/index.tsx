@@ -217,7 +217,7 @@ const firstWaitingClientId = (mod: string, want: 'MT' | 'OP') => {
 
   {/* ---- optimisation grid ---- */}
   {LAYOUT.map(({ category, count }) => (
-    <section key={category} className="space-y-2">
+    <section key={category} className="space-y-2 with-divider">
       <h2 className="font-semibold">{category}</h2>
       <div className="flex flex-wrap gap-4">
         {Array.from({ length: count }).map((_, idx) =>
