@@ -171,42 +171,90 @@ app.listen({ port:PORT, host:'0.0.0.0' }, err => {
     });
 
     /* ─── optim:start ─── */
-    socket.on('optim:start',
-      async (
-        { category,index,type,clientId }:
-        { category:string; index:number; type:'MT'|'OP'; clientId?:string },
-        ack?: (r:{ok:boolean;msg?:string})=>void
-      )=>{
-        try{
-          if (clientId) {
-            const another = await prisma.sessionStep.findFirst({
-              where: { status: StepStatus.ACTIVE, session: { clientId } },
-            });
-            if (another) throw new Error('Client already in another optimisation');
-          }
+socket.on(
+  'optim:start',
+  async (
+    {
+      category,
+      index,
+      type,
+      clientId,
+      durationSec,
+    }: {
+      category: string;
+      index: number;
+      type: 'MT' | 'OP';
+      clientId?: string;
+      durationSec?: number;
+    },
+    ack?: (r: { ok: boolean; msg?: string }) => void,
+  ) => {
+    try {
+      /* 1️⃣  guard-rail: only one active optimisation per client */
+      if (clientId) {
+        const another = await prisma.sessionStep.findFirst({
+          where: {
+            status: StepStatus.ACTIVE,
+            session: { clientId },
+          },
+        });
+        if (another) throw new Error('Client already in another optimisation');
+      }
 
-          const st = await prisma.station.findFirst({ where:{ category,index } });
-          if(!st) throw new Error('Station not found');
+      /* 2️⃣  locate station */
+      const st = await prisma.station.findFirst({ where: { category, index } });
+      if (!st) throw new Error('Station not found');
 
-          const m = mins(category,type); if(!m) throw new Error('Unknown category/type');
-          await prisma.station.update({ where:{id:st.id}, data:{ status:Status.IN_USE } });
+      /* 3️⃣  work out duration */
+      const fallbackMin = mins(category, type);          // minutes or null
+      if (durationSec == null && fallbackMin == null) {
+        throw new Error('Unknown category/type and no custom duration');
+      }
+      const dur = durationSec ?? fallbackMin! * 60;      // seconds
 
-          const step = await getNextPendingStep(st.modalityId!, type, clientId);
-          if(!step) throw new Error('No pending step');
+      /* 4️⃣  claim the next pending step (before locking station) */
+      const step = await getNextPendingStep(st.modalityId!, type, clientId);
+      if (!step) throw new Error('No pending step');
 
-          const started = new Date(); const dur=m*60;
-          await prisma.sessionStep.update({ where:{id:step.id},
-            data:{ status:StepStatus.ACTIVE,startAt:started,duration:dur,stationId:st.id } });
+      /* 5️⃣  lock station + mark step ACTIVE in a single await chain */
+      await prisma.$transaction([
+        prisma.station.update({
+          where: { id: st.id },
+          data: { status: Status.IN_USE },
+        }),
+        prisma.sessionStep.update({
+          where: { id: step.id },
+          data: {
+            status: StepStatus.ACTIVE,
+            startAt: new Date(),
+            duration: dur,
+            stationId: st.id,
+          },
+        }),
+      ]);
 
-          io.emit('station:update',{ category,index,
-            data:{ type,startAt:started.toISOString(),duration:dur, clientName:step.session.client.firstName }});
-
-          io.emit('plan:update',(await getTodayPlans())
-            .find(p=>p.id===step.session.client.id));
-
-          ack?.({ok:true});
-        }catch(e:any){ ack?.({ok:false,msg:e.message}); }
+      /* 6️⃣  broadcast updates (unchanged) */
+      io.emit('station:update', {
+        category,
+        index,
+        data: {
+          type,
+          startAt: new Date().toISOString(),
+          duration: dur,
+          clientName: step.session.client.firstName,
+        },
       });
+      io.emit(
+        'plan:update',
+        (await getTodayPlans()).find((p) => p.id === step.session.client.id),
+      );
+
+      ack?.({ ok: true });
+    } catch (e: any) {
+      ack?.({ ok: false, msg: e.message });
+    }
+  },
+);
 
     /* ─── session:stop ─── */
     socket.on('session:stop',

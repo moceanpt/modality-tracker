@@ -1,0 +1,6 @@
+/* adds a faint separator above any element with .with-divider */
+.with-divider:not(:first-child) {
+    border-top: 1px dashed rgb(148 163 184 / .4); /* slate-400/40 */
+    padding-top: .75rem;                          /* pt-3 to compensate */
+    margin-top: .75rem;                           /* mt-3 for spacing */
+  }

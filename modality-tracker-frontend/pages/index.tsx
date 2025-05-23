@@ -259,10 +259,12 @@ const cell = (c: string, i: number) => {
   const done      = busy && st!.done;
   const critical  = busy && !done && (st!.left ?? 0) < 60;   // <-- under 60 s
 
+
   let bg = 'bg-white hover:bg-sky-50';
   if (busy && !done)
     bg = st!.type === 'MT' ? 'bg-orange-500 text-white' : 'bg-indigo-600 text-white';
   if (done) bg = 'bg-red-600 text-white';
+
 
   return (
     <div key={i} className="relative">
