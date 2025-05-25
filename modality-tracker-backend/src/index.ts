@@ -6,8 +6,10 @@ import { Server } from 'socket.io';
 import planRoutes from './routes/plan';
 
 /* ───────── front-end origin (change only if your FE URL changes) ───────── */
-const FRONT_ORIGIN = 'https://modality-tracker-frontend.onrender.com';
-
+const FRONT_ORIGIN =
+  process.env.NODE_ENV === 'production'
+    ? 'https://modality-tracker-frontend.onrender.com'
+    : 'http://localhost:3000'; 
 
 /* ───────── static config ───────── */
 const TIMER: Record<string, { MT: number; OP: number }> = {
