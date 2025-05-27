@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { API } from '../src/lib/constants';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002'; 
 
 export default function Intake() {
   const [first, setFirst] = useState('');
