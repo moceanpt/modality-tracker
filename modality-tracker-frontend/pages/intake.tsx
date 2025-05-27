@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
+import { API } from '../src/lib/constants';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002'; 
 
@@ -8,11 +9,12 @@ export default function Intake() {
   const [lastI, setLastI] = useState('');
   const [opts,  setOpts]  = useState<string[]>([]);
   const router = useRouter();
+  const firstRef = useRef<HTMLInputElement>(null);
 
   const LIST = [
     'PHYSICAL','GUT (LASER)','GUT (EMS)','STRESS',
     'CIRCULATION (BACK)','CIRCULATION (FRONT)',
-    'ENERGY','CELL','BRAIN'
+    'ENERGY','CELL','BRAIN','INFRARED SAUNA', 'HBOT', 'CRYO',
   ];
 
   async function submit() {
@@ -47,6 +49,7 @@ export default function Intake() {
       <h1 className="text-xl font-bold">New Client</h1>
 
       <input
+        autoFocus
         className="w-full border p-2 rounded"
         placeholder="First name"
         value={first}

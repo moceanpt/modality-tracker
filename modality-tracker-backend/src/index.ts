@@ -6,10 +6,24 @@ import { Server } from 'socket.io';
 import planRoutes from './routes/plan';
 
 /* ───────── front-end origin (change only if your FE URL changes) ───────── */
-const FRONT_ORIGIN =
-  process.env.NODE_ENV === 'production'
-    ? 'https://modality-tracker-frontend.onrender.com'
-    : 'http://localhost:3000'; 
+// ─── build the whitelist of allowed front-end origins ───────────
+const FRONT_ORIGIN: string[] = [
+  'https://modality-tracker-frontend.onrender.com', // production
+  'http://localhost:3000',                          // laptop
+  'http://192.168.1.7:3000',                        // LAN devices
+];
+if (process.env.FE_ORIGIN) FRONT_ORIGIN.unshift(process.env.FE_ORIGIN);
+
+// ─── Fastify + Prisma singletons (declare ONLY ONCE) ────────────
+const app    = Fastify({ logger: true });
+const prisma = new PrismaClient();
+
+// ─── CORS (register before any routes) ──────────────────────────
+app.register(cors, {
+  origin        : FRONT_ORIGIN,
+  methods       : ['GET', 'POST', 'HEAD', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+});
 
 /* ───────── static config ───────── */
 const TIMER: Record<string, { MT: number; OP: number }> = {
@@ -22,16 +36,11 @@ const TIMER: Record<string, { MT: number; OP: number }> = {
   'GUT (EMS)':           { MT: 20, OP: 35 },
   'GUT (LASER)':         { MT: 20, OP: 35 },
   STRESS:                { MT: 15, OP: 25 },
+  'INFRARED SAUNA':      { MT: 25, OP: 35 },
+  'HBOT':                { MT: 30, OP: 60 },
+  'CRYO':                { MT: 3, OP: 3 },
 };
 
-const app    = Fastify({ logger: true });
-const prisma = new PrismaClient();
-
-/* ── CORS for every REST request ────────────────────────────────────────── */
-app.register(cors, {
-  origin : FRONT_ORIGIN,                  // <<< exact origin
-  methods: ['GET', 'POST', 'HEAD', 'OPTIONS']
-});
 
 /* ── tiny health-check so Render stops getting 404 on “/” ──────────────── */
 app.head('/', (_, reply) => reply.code(204).send());

@@ -1,5 +1,5 @@
 // prisma/seed.ts
-import { PrismaClient, Status } from '@prisma/client';
+const { PrismaClient, Status } from '@prisma/client';
 const { v4: uuid } = require('uuid');   
 
 const prisma = new PrismaClient();
