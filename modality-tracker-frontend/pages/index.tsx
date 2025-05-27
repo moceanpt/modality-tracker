@@ -27,9 +27,6 @@ type Cell = {
   left?: number;
   done?: boolean;
 };
-type Map = Record<string, Record<number, Cell | undefined>>;
-type PlanStep = { modality: string; status: 'PENDING' | 'ACTIVE' | 'DONE'; left?: number };
-type PlanClient = { id: string; name: string; steps: PlanStep[] };
 
 /* ─── static layout ─── */
 const LAYOUT = [
