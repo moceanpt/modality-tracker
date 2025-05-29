@@ -1,6 +1,6 @@
 /* pages/index.tsx – queue-level MT / OP / Manual */
 
-import { useEffect, useState, useRef, useLayoutEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 import DurationPicker from '../components/DurationPicker';
 import ClientCard             from '../components/ClientCard';
@@ -8,6 +8,9 @@ import { PlanClient, Map }    from '../types';
 import Link from 'next/link';
 import BoardView from '../components/BoardView';
 import { API } from '../src/lib/constants';
+import PlanEditorModal from '../components/PlanEditorModal';
+import { OPT_LIST } from '../src/lib/constants';
+
 
 /* ─── socket ─── */
 const socket = io(API);
@@ -51,23 +54,7 @@ const LAYOUT = [
  { category: 'HBOT',                count: 1 },
 
 ];
-const OPT_LIST = [
-  'CIRCULATION (BACK)',  // row 1
-  'CIRCULATION (FRONT)',
-  'PHYSICAL',
 
-  'CELL',                // row 2
-  'ENERGY',
-  'BRAIN',
-
-  'GUT (LASER)',         // row 3
-  'GUT (EMS)',
-  'STRESS',
-
-  'INFRARED SAUNA',      // row 4
-  'CRYO',
-  'HBOT',
-];
 
 const DEFAULT_MIN: Record<
   string,
@@ -108,44 +95,60 @@ export default function Board() {
   const [showIntake, setShowIntake] = useState(false);
   const [first, setFirst] = useState('');
   const [opts, setOpts] = useState<string[]>([]);
+    
+  
+  const [noteView, setNoteView]   = useState<string | null>(null);
+  const [editing,  setEditing]    = useState<PlanClient | null>(null);
+  
 
+  const [confirmEnd, setConfirmEnd] = useState<PlanClient | null>(null); 
    /* toast */
   const [err, setErr] = useState<string | null>(null);
   
   const firstRef = useRef<HTMLInputElement>(null);
-
+  const noteCache = useRef('');   
+  const noteRef  = useRef<HTMLTextAreaElement>(null); 
   const isDesktop = useIsDesktop(); 
 
+  
   /* ─── socket lifecycle ─── */
 useEffect(() => {
 
   
   /** when either modal is up we must not mutate data-state ➜ keeps input focused */
-  const modalOpen = () => showIntake || manual;
+  const modalOpen = () => showIntake || manual || editing || noteView;
 
   /* -------- helper wrappers to skip updates while typing -------- */
  
 
   /* ---- register listeners ---- */
   socket.on('station:update', ({ category, index, data }: any) => {
-      setData(p => ({                           // ← just use the plain setter
+    if (modalOpen()) return;    
+    setData(p => ({                           // ← just use the plain setter
         ...p,
         [category]: { ...(p[category] ?? {}), [index]: data },
       }));
     });
 
-    socket.on('station:batch', (map: Map) => setData(() => map));
-
-    socket.on('plan:list',   (all: PlanClient[]) => setClients(() => all));
-
+    socket.on('station:batch', (map: Map) => {
+      if (modalOpen()) return;                    // ⬅️
+      setData(() => map);
+    });
+    
+    socket.on('plan:list', (all: PlanClient[]) => {
+      if (modalOpen()) return;                    // ⬅️
+      setClients(() => all);
+    });
+    
     socket.on('plan:update', (one: PlanClient | null) => {
-        if (!one?.id) return;                       // ignore bogus payloads
-        setClients(p => p.map(c => (c.id === one.id ? one : c)));
-      });
-
-      socket.on('plan:remove', ({ clientId }: { clientId: string }) =>
-          setClients(p => p.filter(c => c.id !== clientId)),
-        );
+      if (modalOpen() || !one?.id) return;        // ⬅️
+      setClients(p => p.map(c => (c.id === one.id ? one : c)));
+    });
+    
+    socket.on('plan:remove', ({ clientId }: { clientId: string }) => {
+      if (modalOpen()) return;                    // ⬅️
+      setClients(p => p.filter(c => c.id !== clientId));
+    });
 
   socket.emit('init');
 
@@ -160,7 +163,7 @@ useEffect(() => {
     socket.off('plan:remove');
   };
 /* 👇 re-run listeners whenever a modal opens/closes so modalOpen() stays fresh */
-}, [showIntake, manual]);
+}, [showIntake, manual, editing, noteView]);
 
 /* ─── focus the first-name box when the intake modal opens ─── */
 useEffect(() => {
@@ -174,7 +177,7 @@ useEffect(() => {
 useEffect(() => {
   const id = setInterval(() => {
     // ⏸  Don’t mutate state while a text-field is active
-    if (showIntake || manual) return;
+    if (showIntake || manual || editing || noteView) return;
 
     const now = Date.now();
 
@@ -199,6 +202,8 @@ useEffect(() => {
       return clone;
     });
 
+
+
     /* plan countdowns ---------------------------------------------------- */
     setClients(prev =>
       prev.map(cl => ({
@@ -215,7 +220,7 @@ useEffect(() => {
   }, 1000);
 
   return () => clearInterval(id);
-}, [showIntake, manual]);
+}, [showIntake, manual, editing, noteView]);
 
 if (!mounted) return null;
 
@@ -312,7 +317,13 @@ const start = (
     await fetch(`${API}/plan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId, optimizations: opts, mode: 'UNSPEC' }),
+      // body: JSON.stringify({ clientId, optimizations: opts, mode: 'UNSPEC', note }), //  keep this off now josh
+      body: JSON.stringify({
+           clientId,
+           optimizations: opts,
+           mode: 'UNSPEC',
+           note: noteRef.current?.value ?? '',
+         }),
     });
 
     setShowIntake(false);
@@ -398,14 +409,36 @@ function useStickyState<T>(key: string, initial: T): [T, (v: T) => void] {
 return (
   <>
     {/* ───────── phone (< 640 px) ───────── */}
-    {!isDesktop && (   
-    <div>
-    <BoardView
-    layout={LAYOUT}
-    cell={cell}
-    onNewClient={() => setShowIntake(true)}
-  />
+    {!isDesktop && (
+  <div className="p-3 space-y-6">
+    {/* board (⇣ keep under the list) */}
+    <div className="relative z-0">
+      <BoardView
+        layout={LAYOUT}
+        cell={cell}
+        onNewClient={() => setShowIntake(true)}
+      />
     </div>
+
+    {/* client list – sits OVER the board */}
+    <section className="relative z-50 space-y-3">
+      
+      
+      {clients.map((c) => (
+        <ClientCard
+          key={c.id}
+          c={c}
+          dataMap={data}
+          onX={() => {
+            const allDone = c.steps.every((s) => s.status === 'DONE');
+            allDone ? terminate(c.id) : setConfirmEnd(c);
+          }}
+          onViewNote={(note) => setNoteView(note)}
+          onEdit={() => setEditing(c)}
+        />
+      ))}
+    </section>
+  </div>
 )}
     {/* ───────── tablet / desktop (≥ 640 px) ───────── */}
     <div className="hidden sm:block">
@@ -462,7 +495,13 @@ return (
               key={c.id}
               c={c}
               dataMap={data}
-              onX={() => terminate(c.id)}
+              onX={() => {
+                   /* if every step is DONE we can end immediately */
+                   const allDone = c.steps.every(s => s.status === 'DONE');
+                   allDone ? terminate(c.id) : setConfirmEnd(c);
+                 }}
+              onViewNote={(note) => setNoteView(note)}
+              onEdit={() => setEditing(c)}
             />
           ))}
         </aside>
@@ -513,70 +552,156 @@ return (
 
     {/* intake modal */}
     {showIntake && (
-      <Backdrop onClose={() => setShowIntake(false)}>
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="bg-white rounded-lg p-6 w-[28rem] space-y-4 relative"
-        >
-          <button
-            onClick={() => setShowIntake(false)}
-            className="absolute top-2 right-3 text-2xl"
-          >
-            ×
-          </button>
-          <h2 className="text-lg font-bold">New Client Plan</h2>
-
-          <input
-            ref={firstRef}
-            autoFocus
-            value={first}
-            onChange={(e) => setFirst(e.target.value)}
-            className="w-full border p-2 rounded bg-white"
-            placeholder="First name"
-          />
-
-<div className="grid grid-cols-3 gap-3 text-sm">
-  {OPT_LIST.map(opt => (
-    <label
-      key={opt}
-      className="flex items-center gap-1 
-                 whitespace-normal break-words 
-                 leading-tight text-xs max-w-[7rem]"
+  <Backdrop onClose={() => setShowIntake(false)}>
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="bg-white rounded-lg p-6 w-[28rem] space-y-4 relative"
     >
-      <input
-        type="checkbox"
-        checked={opts.includes(opt)}
-        onChange={e =>
-          setOpts(p =>
-            e.target.checked ? [...p, opt] : p.filter(x => x !== opt)
-          )
-        }
-      />
-      {opt}
-    </label>
-  ))}
-</div>      
+      {/* ── close (×) ── */}
+      <button
+        onClick={() => setShowIntake(false)}
+        className="absolute top-2 right-3 text-2xl"
+      >
+        ×
+      </button>
 
-          <button
-            disabled={!first.trim() || opts.length === 0}
-            onClick={submitPlan}
-            className={`w-full py-2 rounded text-white ${
-              !first.trim() || opts.length === 0
-                ? 'bg-emerald-400 opacity-50'
-                : 'bg-emerald-600 hover:bg-emerald-700'
-            }`}
+      <h2 className="text-lg font-bold">New Client Plan</h2>
+
+      {/* first-name input */}
+      <input
+        ref={firstRef}
+        autoFocus
+        value={first}
+        onChange={(e) => setFirst(e.target.value)}
+        className="w-full border p-2 rounded bg-white"
+        placeholder="First name"
+      />
+
+      {/* optimisation check-boxes */}
+      <div className="grid grid-cols-3 gap-3 text-sm">
+        {OPT_LIST.map((opt) => (
+          <label
+            key={opt}
+            className="flex items-center gap-1 whitespace-normal break-words leading-tight text-xs max-w-[7rem]"
           >
-            Create Plan
-          </button>
-        </div>
-      </Backdrop>
-    )}
+            <input
+              type="checkbox"
+              checked={opts.includes(opt)}
+              onChange={(e) =>
+                setOpts((p) =>
+                  e.target.checked ? [...p, opt] : p.filter((x) => x !== opt)
+                )
+              }
+            />
+            {opt}
+          </label>
+        ))}
+      </div>
+
+      {/* ── NOTE textarea (new) ── */}
+      <textarea
+        ref={noteRef}
+        defaultValue={noteCache.current}             // repopulate if the element remounts
+        onChange={(e) => {                           // keep cache up-to-date
+          noteCache.current = e.target.value;
+        }}
+        rows={3}
+        placeholder="Session note (optional)…"
+        className="w-full border p-2 rounded resize-none text-sm"
+      />
+
+      {/* create-plan button */}
+      <button
+        disabled={!first.trim() || opts.length === 0}
+        onClick={submitPlan}
+        className={`w-full py-2 rounded text-white ${
+          !first.trim() || opts.length === 0
+            ? 'bg-emerald-400 opacity-50'
+            : 'bg-emerald-600 hover:bg-emerald-700'
+        }`}
+      >
+        Create Plan
+      </button>
+    </div>
+  </Backdrop>
+)}
+
+{/* ───────── note viewer ───────── */}
+{noteView && (
+  <Backdrop onClose={() => setNoteView(null)}>
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="bg-white rounded-lg p-6 w-80 space-y-4 relative"
+    >
+      <button
+        onClick={() => setNoteView(null)}
+        className="absolute top-2 right-3 text-xl leading-none"
+      >
+        ×
+      </button>
+      <h3 className="font-bold text-lg">Client Note</h3>
+      <p className="whitespace-pre-wrap text-sm">{noteView}</p>
+    </div>
+  </Backdrop>
+)}
+
+{/* ───────── confirm end-early ───────── */}
+{confirmEnd && (
+  <Backdrop onClose={() => setConfirmEnd(null)}>
+    <div
+      onClick={e => e.stopPropagation()}
+      className="bg-white rounded-lg p-6 w-80 space-y-4 relative text-center"
+    >
+      <button
+        onClick={() => setConfirmEnd(null)}
+        className="absolute top-2 right-3 text-xl leading-none"
+      >
+        ×
+      </button>
+
+      <h3 className="text-lg font-bold">End session early?</h3>
+      <p className="text-sm">
+        <strong>{confirmEnd.name}</strong> still has unfinished optimisations.
+        Are you sure you want to terminate today’s plan?
+      </p>
+
+      <div className="flex justify-center gap-4 mt-4">
+        <button
+          onClick={() => {
+            terminate(confirmEnd.id);     // reuse existing socket emit
+            setConfirmEnd(null);
+          }}
+          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+        >
+          Yes, end now
+        </button>
+
+        <button
+          onClick={() => setConfirmEnd(null)}
+          className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+        >
+          No, keep running
+        </button>
+      </div>
+    </div>
+  </Backdrop>
+)}
+
+{/* ───────── plan editor ───────── */}
+{editing && (
+  <Backdrop onClose={() => setEditing(null)}>
+    <PlanEditorModal
+      client={editing}
+      onClose={() => setEditing(null)}
+    />
+  </Backdrop>
+)}
 
     {/* manual-timer modal */}
     {manual && (
       <Backdrop onClose={() => setManual(null)}>
         <div
-          onClick={(e) => e.stopPropagation()}
+          onClickCapture={(e) => e.stopPropagation()}
           className="relative bg-white rounded-lg p-6 space-y-4"
         >
           <button
@@ -645,12 +770,15 @@ function Backdrop({
   onClose,
 }: {
   children: React.ReactNode;
-  onClose: () => void;
+  onClose : () => void;
 }) {
   return (
     <div
-      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
-      onClick={onClose}
+    className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center"
+    onClick={(e) => {
+        /* close ONLY when the backdrop itself is clicked */
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       {children}
     </div>

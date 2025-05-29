@@ -1,6 +1,6 @@
 // types.ts
 export type PlanStep   = { modality: string; status: 'PENDING' | 'ACTIVE' | 'DONE'; left?: number };
-export type PlanClient = { id: string; name: string; steps: PlanStep[] };
+export type PlanClient = { id: string; name: string; note?: string; steps: PlanStep[] };
 
 export type Cell = {
   type: 'MT' | 'OP';
