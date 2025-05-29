@@ -42,7 +42,7 @@ export default function ClientCard({
     {/* 📓 icon opens note viewer */}
     {c.note && (
       <button
-        onClick={() => onViewNote?.(c.note)}
+        onClick={() => c.note && onViewNote?.(c.note)}
         title="View note"
         className="text-base leading-none focus:outline-none"
       >
