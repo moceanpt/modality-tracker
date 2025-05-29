@@ -62,6 +62,8 @@ model Session {
 
   mode     Mode      @default(UNSPEC)
   
+  
+  note      String      @default("")
   clientId String
   client   Client   @relation(fields: [clientId], references: [id])
 
@@ -90,8 +92,8 @@ model SessionStep {
 
   // Foreign keys
   sessionId  String
-  stationId  String?                               // ← make optional
   modalityId String
+  stationId  String? 
 
   // Timing
   startAt    DateTime?

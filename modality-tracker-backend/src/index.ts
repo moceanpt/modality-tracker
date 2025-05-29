@@ -21,7 +21,7 @@ const prisma = new PrismaClient();
 // ─── CORS (register before any routes) ──────────────────────────
 app.register(cors, {
   origin        : FRONT_ORIGIN,
-  methods       : ['GET', 'POST', 'HEAD', 'OPTIONS'],
+  methods       : ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'HEAD', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
 });
 
@@ -121,6 +121,7 @@ async function getTodayPlans() {
   return sessions.map(s => ({
     id   : s.client.id,
     name : `${s.client.firstName} ${s.client.lastInitial}.`,
+    note: s.note, 
     mode : s.mode,                                // ← A
     steps: s.steps.map(st => ({
       modality: st.modality.name,
@@ -141,7 +142,7 @@ app.listen({ port:PORT, host:'0.0.0.0' }, err => {
 
   /* Web-Sockets must use the same CORS policy */
   const io = new Server(app.server, {
-    cors: { origin: FRONT_ORIGIN, methods: ['GET', 'POST'] }
+    cors: { origin: FRONT_ORIGIN, methods: ['GET', 'POST', 'PATCH'] }
   });
 
   app.io = io;

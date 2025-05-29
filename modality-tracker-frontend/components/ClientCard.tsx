@@ -8,12 +8,14 @@ const pad   = (n: number) => n.toString().padStart(2, '0');
 const pretty = (s: number) => `${pad((s / 60) | 0)}:${pad(s % 60)}`;
 
 export default function ClientCard({
-  c, dataMap, onX,
-}: {
-  c: PlanClient;
-  dataMap: Map;
-  onX?: () => void;
-}) {
+    c, dataMap, onX, onViewNote, onEdit,       // ← add onViewNote here
+  }: {
+    c: PlanClient;
+    dataMap: Map;
+    onX?: () => void;
+    onViewNote?: (note: string) => void;
+    onEdit?: () => void; 
+  }) {
   const headerClr =
     c.steps.every(s => s.status === 'DONE')
       ? 'bg-emerald-600'
@@ -23,12 +25,41 @@ export default function ClientCard({
 
   return (
     <div className="border rounded shadow text-xs w-56">
-      <div className={`px-2 py-1 flex justify-between items-center text-white ${headerClr}`}>
-        <span>{c.name}</span>
-        {onX && (
-          <button onClick={onX} className="text-lg leading-none">×</button>
-        )}
-      </div>
+      {/* ─────── HEADER ─────── */}
+      <div
+  className={`px-2 py-1 flex justify-between items-center text-white ${headerClr}`}
+>
+  {/* left side ─ name + (optional) note icon */}
+  <div className="flex items-center gap-1">
+    {/* clicking the name opens the optimisation editor */}
+    <button
+      onClick={() => onEdit?.()}            // pass through to parent
+      className="font-semibold focus:outline-none text-left"
+    >
+      {c.name}
+    </button>
+
+    {/* 📓 icon opens note viewer */}
+    {c.note && (
+      <button
+        onClick={() => onViewNote?.(c.note)}
+        title="View note"
+        className="text-base leading-none focus:outline-none"
+      >
+        📝
+      </button>
+    )}
+  </div>
+
+  {/* right side ─ manual terminate (×) */}
+  {onX && (
+    <button onClick={onX} className="text-lg leading-none">
+      ×
+    </button>
+  )}
+</div>
+
+
 
       <ul className="bg-white divide-y">
         {c.steps.map(s => {

@@ -7,6 +7,7 @@ export default function Intake() {
   const [first, setFirst] = useState('');
   const [lastI, setLastI] = useState('');
   const [opts,  setOpts]  = useState<string[]>([]);
+  const [note,  setNote]  = useState('');
   const router = useRouter();
   const firstRef = useRef<HTMLInputElement>(null);
 
@@ -31,9 +32,14 @@ export default function Intake() {
 
     /* 2) create today’s plan */
     await fetch(`${API}/plan`, {
-      method : 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body   : JSON.stringify({ clientId, optimizations: opts })
+            method : 'POST',
+            headers: { 'Content-Type':'application/json' },
+            body   : JSON.stringify({
+              clientId,
+              optimizations: opts,
+              mode: 'UNSPEC',
+              note,                          // ← send the note
+            })
     });
 
     /* 3) go back to the board */
@@ -79,6 +85,16 @@ export default function Intake() {
           </label>
         ))}
       </div>
+
+ {/* NEW note text-area */}
+      <textarea
+        value={note}
+        autoFocus
+        onChange={e => setNote(e.target.value)}
+        rows={3}
+        placeholder="Session note (optional)…"
+        className="w-full border p-2 rounded resize-none text-sm"
+      />
 
       <button
         onClick={submit}
