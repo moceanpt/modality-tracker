@@ -18,6 +18,14 @@ export default function PlanEditorModal({
   const [checked, setChecked] = useState<string[]>(initialPending);
   const [saving , setSaving ] = useState(false);
 
+  // ─── helper: hide iPad keyboard on checkbox tap ───
+const blurActiveInput = () => {
+    const el = document.activeElement as HTMLElement | null;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+      el.blur();
+    }
+  };
+  
   /* toggle helper */
   const toggle = (opt: string, on: boolean) =>
     setChecked(prev => (on ? [...prev, opt] : prev.filter(x => x !== opt)));
@@ -91,21 +99,22 @@ export default function PlanEditorModal({
         : '';
 
     return (
-      <label key={opt} className={`flex items-center gap-1 ${labelCls}`}>
+        <label key={opt} className={`flex items-center gap-1 ${labelCls}`}>
         <input
           type="checkbox"
           disabled={locked}
           checked={
-            locked            // show ✓ for finished steps
+            locked            // finished steps stay checked
               ? true
               : checked.includes(opt)
           }
-          onChange={e => {
-            if (locked) return;            // extra guard
-            setChecked(prev =>
+          onChange={(e) => {
+            if (locked) return;    // safeguard
+            blurActiveInput();     // 👈 hide the keyboard
+            setChecked((prev) =>
               e.target.checked
                 ? [...prev, opt]
-                : prev.filter(x => x !== opt)
+                : prev.filter((x) => x !== opt)
             );
           }}
         />

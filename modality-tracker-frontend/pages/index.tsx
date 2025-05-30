@@ -20,6 +20,14 @@ const socket = io(API);
 const pad = (n: number) => n.toString().padStart(2, '0');
 const pretty = (s: number) => `${pad((s / 60) | 0)}:${pad(s % 60)} left`;
 
+/* ─── helper: hide iPad keyboard when we tap a non-text control ─── */
+const blurActiveInput = () => {
+  const el = document.activeElement as HTMLElement | null;
+  if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+    el.blur();
+  }
+};
+
 
 /* ─── types ─── */
 type Cell = {
@@ -587,11 +595,12 @@ return (
             <input
               type="checkbox"
               checked={opts.includes(opt)}
-              onChange={(e) =>
-                setOpts((p) =>
+              onChange={(e) => {
+                blurActiveInput();                       // ① hide keyboard
+                setOpts((p) =>                           // ② update list
                   e.target.checked ? [...p, opt] : p.filter((x) => x !== opt)
-                )
-              }
+                );
+              }}
             />
             {opt}
           </label>
