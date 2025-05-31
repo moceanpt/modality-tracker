@@ -1,19 +1,29 @@
 // prisma/seed.ts
-const { PrismaClient, Status } from '@prisma/client';
-const { v4: uuid } = require('uuid');   
+import { PrismaClient, Status } from '@prisma/client';
+import { v4 as uuid } from 'uuid';
 
 const prisma = new PrismaClient();
 
 const layout: [string, number][] = [
+  /* row-1 */
   ['CIRCULATION (BACK)',  4],
   ['CIRCULATION (FRONT)', 3],
-  ['BRAIN',               4],
-  ['ENERGY',              3],
-  ['CELL',                2],
   ['PHYSICAL',            3],
-  ['GUT (EMS)',           2],
+
+  /* row-2 */
+  ['CELL',                2],
+  ['ENERGY',              3],
+  ['BRAIN',               4],
+
+  /* row-3 */
   ['GUT (LASER)',         2],
+  ['GUT (EMS)',           2],
   ['STRESS',              2],
+
+  /* row-4  – new */
+  ['INFRARED SAUNA',      3],
+  ['CRYO',                1],
+  ['HBOT',                1],
 ];
 
 async function main() {
