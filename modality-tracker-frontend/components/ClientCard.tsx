@@ -79,7 +79,7 @@ export default function ClientCard({
                   s.status === 'ACTIVE' ? 'bg-orange-50'
                 : s.status === 'DONE'   ? 'bg-emerald-50' : ''}`}>
               <span className={s.status === 'ACTIVE' ? 'font-semibold' : ''}>
-              {KEY_TO_LABEL[s.modality] ?? s.modality}
+              {(KEY_TO_LABEL as Record<string, string>)[s.modality] ?? s.modality}
                  {s.status !== 'DONE' && free !== total && ` (${free})`}
               </span>
               <span>

@@ -7,7 +7,7 @@ export const API =
 /* --------------------------------------------------------------
  *  Optimisation keys ⇄ human-readable labels
  * ------------------------------------------------------------ */
-export const KEY_TO_LABEL = {
+export const KEY_TO_LABEL: Record<string, string> = {
   // Row 1
   CIRC_BACK   : 'CIRCULATION (BACK)',
   CIRC_FRONT  : 'CIRCULATION (FRONT)',
