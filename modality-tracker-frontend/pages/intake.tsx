@@ -17,6 +17,7 @@ export default function Intake() {
     'ENERGY','CELL','BRAIN','INFRARED SAUNA', 'HBOT', 'CRYO',
   ];
 
+
   async function submit() {
     if (!first.trim() || !lastI.trim() || opts.length === 0) return;
 
@@ -89,7 +90,6 @@ export default function Intake() {
  {/* NEW note text-area */}
       <textarea
         value={note}
-        autoFocus
         onChange={e => setNote(e.target.value)}
         rows={3}
         placeholder="Session note (optional)…"

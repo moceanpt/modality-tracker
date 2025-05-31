@@ -18,51 +18,50 @@ export default function PlanEditorModal({
   const [checked, setChecked] = useState<string[]>(initialPending);
   const [saving , setSaving ] = useState(false);
 
-  // ─── helper: hide iPad keyboard on checkbox tap ───
-const blurActiveInput = () => {
-    const el = document.activeElement as HTMLElement | null;
-    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-      el.blur();
-    }
-  };
+ /* ─── helper: hide keyboard unless it’s the “name” input we still need ─── */
+const blurIfNotNameInput = (skipEl?: HTMLElement | null) => {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el || el === skipEl) return;                 // keep focus if it’s that element
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.blur();
+    };
   
   /* toggle helper */
   const toggle = (opt: string, on: boolean) =>
     setChecked(prev => (on ? [...prev, opt] : prev.filter(x => x !== opt)));
 
   /* ─── save (PATCH) ─── */
-  const save = async () => {
+const save = async () => {
     setSaving(true);
-
+  
     const add    = checked.filter(o => !initialPending.includes(o));
     const remove = initialPending.filter(o => !checked.includes(o));
-
-    console.log('[PlanEditor] add →', add, 'remove →', remove);
-
-    if (!add.length && !remove.length) return onClose();
-
+  
+    // nothing changed → just close the modal
+    if (!add.length && !remove.length) {
+      onClose();
+      return;
+    }
+  
     const url  = `${API}/plan`;
     const body = { clientId: client.id, add, remove };
-
-    console.log('[PlanEditor] PATCH', url, body);
-
+  
     try {
       const res = await fetch(url, {
         method : 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body   : JSON.stringify(body),
       });
-
-      console.log('[PlanEditor] response', res.status);
+  
       if (!res.ok) {
         const msg = await res.text();
         throw new Error(msg);
       }
-      onClose();                   // success → close modal
+  
+      onClose();                     // success
     } catch (err) {
       console.error('[PlanEditor] fetch failed:', err);
       alert('Failed to update plan, please try again.');
-      setSaving(false);            // let user retry
+      setSaving(false);              // let user retry
     }
   };
 
@@ -110,7 +109,7 @@ const blurActiveInput = () => {
           }
           onChange={(e) => {
             if (locked) return;    // safeguard
-            blurActiveInput();     // 👈 hide the keyboard
+            blurIfNotNameInput();     // 👈 hide the keyboard
             setChecked((prev) =>
               e.target.checked
                 ? [...prev, opt]

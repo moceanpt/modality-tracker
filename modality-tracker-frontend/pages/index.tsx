@@ -9,8 +9,8 @@ import Link from 'next/link';
 import BoardView from '../components/BoardView';
 import { API } from '../src/lib/constants';
 import PlanEditorModal from '../components/PlanEditorModal';
-import { OPT_LIST } from '../src/lib/constants';
-
+import { KEY_TO_LABEL, LABEL_TO_KEY, OPT_LIST } from '../src/lib/constants';
+import ModalPortal from '../components/ModalPortal';   
 
 /* ─── socket ─── */
 const socket = io(API);
@@ -20,13 +20,14 @@ const socket = io(API);
 const pad = (n: number) => n.toString().padStart(2, '0');
 const pretty = (s: number) => `${pad((s / 60) | 0)}:${pad(s % 60)} left`;
 
-/* ─── helper: hide iPad keyboard when we tap a non-text control ─── */
-const blurActiveInput = () => {
+/* ─── helper: hide keyboard unless the focused element is the name box ─── */
+const blurIfNotNameInput = (skipEl?: HTMLElement | null) => {
   const el = document.activeElement as HTMLElement | null;
-  if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-    el.blur();
-  }
+  if (!el || el === skipEl) return;                 // keep focus for name box
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.blur();
 };
+
+
 
 
 /* ─── types ─── */
@@ -63,18 +64,27 @@ const LAYOUT = [
 
 ];
 
+/** pastel backgrounds for each optimisation */
+const CAT_BG: Record<string, string> = {
+  'CIRCULATION (BACK)' : 'bg-rose-50',
+  'CIRCULATION (FRONT)': 'bg-rose-50',
+  PHYSICAL             : 'bg-orange-50',
 
-const DEFAULT_MIN: Record<
-  string,
-  { MT: number; OP: number }
-> = {
-  // “one-off” modalities first …
-  'CRYO':             { MT: 3,  OP: 3  },
-  'INFRARED SAUNA':   { MT: 30, OP: 55 },
-  'HBOT':             { MT: 30, OP: 55 },
-  'CELL':             { MT: 15, OP: 15 },
+  CELL                 : 'bg-teal-50',
+  ENERGY               : 'bg-emerald-50',
+  BRAIN                : 'bg-sky-50',
 
-  // everything else uses the common rule MT 15 / OP 30
+  'GUT (LASER)'        : 'bg-violet-50',
+  'GUT (EMS)'          : 'bg-violet-50',
+  STRESS               : 'bg-yellow-50',
+
+  'INFRARED SAUNA'     : 'bg-amber-50',
+  CRYO                 : 'bg-cyan-50',
+  HBOT                 : 'bg-indigo-50',
+};
+
+const DEFAULT_MIN: Record<string, { MT: number; OP: number }> = {
+  // regular 15/30 group
   'CIRCULATION (BACK)':  { MT: 15, OP: 30 },
   'CIRCULATION (FRONT)': { MT: 15, OP: 30 },
   'PHYSICAL':            { MT: 15, OP: 30 },
@@ -83,40 +93,59 @@ const DEFAULT_MIN: Record<
   'GUT (LASER)':         { MT: 15, OP: 30 },
   'GUT (EMS)':           { MT: 15, OP: 30 },
   'STRESS':              { MT: 15, OP: 30 },
+  'CELL':           { MT: 15, OP: 15 },
+  'CRYO':           { MT: 3,  OP: 3  },
+  'INFRARED SAUNA': { MT: 30, OP: 55 },
+  'HBOT':           { MT: 30, OP: 55 },
+  
 };
 
 /* ═════════ component ═════════ */
 export default function Board() {
-/* ① mount-gate (declare first) */
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);   // always runs
- 
-  /* board state */
-  const [data, setData] = useState<Map>({});
-  const [pick, setPick] = useState<{ c: string; i: number } | null>(null);
-  const [manual, setManual] = useState<{ c: string; i: number; cid: string } | null>(null);
+  /* ---------- refs & helpers ---------- */
+  const firstRef = useRef<HTMLInputElement>(null);
+  const firstCache = useRef('');
+  
+  /** blur the on-screen keyboard unless the name box itself is focused */
+  const blurKbBeforeCheckbox = () => {
+    const el = document.activeElement as HTMLElement | null;
+    if (!el || el === firstRef.current) return;          // keep focus if name box
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.blur();
+  };
 
-    /* plan list */
+  /* ---------- top-level state ---------- */
+
+  /* ① mount-gate (declare first) */
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  /* board state */
+  const [data,    setData   ] = useState<Map>({});
+  const [pick,    setPick   ] = useState<{ c: string; i: number } | null>(null);
+  const [manual,  setManual ] = useState<{ c: string; i: number; cid: string } | null>(null);
+
+  /* plan list */
   const [clients, setClients] = useState<PlanClient[]>([]);
 
-  /* intake form */
+  /* intake form ---------------------------------------------------- */
   const [showIntake, setShowIntake] = useState(false);
-  const [first, setFirst] = useState('');
-  const [opts, setOpts] = useState<string[]>([]);
-    
-  
-  const [noteView, setNoteView]   = useState<string | null>(null);
-  const [editing,  setEditing]    = useState<PlanClient | null>(null);
-  
+  const [first,      setFirst     ] = useState('');          // controlled text field
+  const [opts,       setOpts      ] = useState<string[]>([]);
 
-  const [confirmEnd, setConfirmEnd] = useState<PlanClient | null>(null); 
-   /* toast */
-  const [err, setErr] = useState<string | null>(null);
-  
-  const firstRef = useRef<HTMLInputElement>(null);
-  const noteCache = useRef('');   
-  const noteRef  = useRef<HTMLTextAreaElement>(null); 
-  const isDesktop = useIsDesktop(); 
+  /* enable / disable the Create-Plan button */
+  const createDisabled =
+  firstCache.current.trim() === '' || opts.length === 0;
+
+  /* ------------- misc modal state ------------- */
+  const [noteView,   setNoteView  ] = useState<string | null>(null);
+  const [editing,    setEditing   ] = useState<PlanClient | null>(null);
+  const [confirmEnd, setConfirmEnd] = useState<PlanClient | null>(null);
+
+  /* ------------- misc refs & helpers ---------- */
+  const noteRef   = useRef<HTMLTextAreaElement>(null);
+  const noteCache = useRef('');           // keeps the textarea’s draft
+  const isDesktop = useIsDesktop();       // viewport ≥ 640 px ?
+  const [err, setErr] = useState<string | null>(null);   // toast
 
   
   /* ─── socket lifecycle ─── */
@@ -148,18 +177,41 @@ useEffect(() => {
       setClients(() => all);
     });
     
-    socket.on('plan:update', (one: PlanClient | null) => {
-      if (modalOpen() || !one?.id) return;        // ⬅️
-      setClients(p => p.map(c => (c.id === one.id ? one : c)));
+    socket.on('plan:update', (fresh: PlanClient | null) => {
+      if (modalOpen() || !fresh?.id) return;
+    
+      setClients(prev =>
+        prev.map(client => {
+          if (client.id !== fresh.id) return client;   // leave others
+    
+          const mergedSteps = fresh.steps.map(freshStep => {
+            const oldStep = client.steps.find(
+              s => s.modality === freshStep.modality,
+            );
+    
+            /* keep our ticking countdown */
+            if (oldStep?.status === 'ACTIVE') {
+              return freshStep.status === 'ACTIVE'
+                ? oldStep          // still running → keep local copy
+                : freshStep;       // server switched to DONE → accept it
+            }
+    
+            /* for all non-ACTIVE rows just take the server version */
+            return freshStep;
+          });
+    
+          return { ...client, steps: mergedSteps };
+        }),
+      );
     });
+    /* ⇡⇡⇡  end of replacement block  ⇡⇡⇡ */
     
     socket.on('plan:remove', ({ clientId }: { clientId: string }) => {
-      if (modalOpen()) return;                    // ⬅️
+      if (modalOpen()) return;
       setClients(p => p.filter(c => c.id !== clientId));
     });
-
-  socket.emit('init');
-
+    
+    socket.emit('init');
  
 
   /* ---- cleanup ---- */
@@ -311,33 +363,35 @@ const start = (
   const stopAck = (c: string, i: number) => socket.emit('session:stop', { category: c, index: i });
   const terminate = (id: string) => socket.emit('plan:terminate', { clientId: id });
 
-  /* ─── intake submit ─── */
-  const disabled = !first.trim() || opts.length === 0;
-  async function submitPlan() {
-    // ➊ upsert client
-    const { clientId } = await fetch(`${API}/client`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ firstName: first.trim(), lastInitial: '' }),
-    }).then((r) => r.json());
+ /* ─── intake submit ─── */
+async function submitPlan() {
+  const rawName = firstCache.current.trim();
+  if (rawName === '') return;                 // safety guard
 
-    // ➋ create today’s plan (no mode)
-    await fetch(`${API}/plan`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      // body: JSON.stringify({ clientId, optimizations: opts, mode: 'UNSPEC', note }), //  keep this off now josh
-      body: JSON.stringify({
-           clientId,
-           optimizations: opts,
-           mode: 'UNSPEC',
-           note: noteRef.current?.value ?? '',
-         }),
-    });
+  /* 1 ▸ upsert client */
+  const { clientId } = await fetch(`${API}/client`, {
+    method : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body   : JSON.stringify({ firstName: rawName, lastInitial: '' }),
+  }).then(r => r.json());
 
-    setShowIntake(false);
-    setFirst('');
-    setOpts([]);
-  }
+  /* 2 ▸ create today’s plan */
+  await fetch(`${API}/plan`, {
+    method : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body   : JSON.stringify({
+      clientId,
+      optimizations: opts, 
+      mode : 'UNSPEC',
+      note : noteRef.current?.value ?? '',
+    }),
+  });
+
+  /* 3 ▸ reset & close */
+  firstCache.current = '';   // clear name box
+  setOpts([]);               // clear ticks
+  setShowIntake(false);
+}
 
   /* ─── render helpers ─── */
 const cell = (c: string, i: number) => {
@@ -476,17 +530,21 @@ return (
 
             {/* optimisation blocks */}
             {LAYOUT.map(({ category, count }) => (
-              <section key={category} className="space-y-2 with-divider">
-                <h2 className="font-semibold">{category}</h2>
+  <section
+    key={category}
+    className={`space-y-2 p-3 rounded-lg shadow-sm ${
+      CAT_BG[category] ?? 'bg-white'
+    }`}
+  >
+    <h2 className="font-semibold text-center">{category}</h2>
 
-                {/* 2-col mini grid (2 × 2 fits 4 tables) */}
-                <div className="grid grid-cols-2 gap-3">
-                  {Array.from({ length: count }).map((_, idx) =>
-                    cell(category, idx)
-                  )}
-                </div>
-              </section>
-            ))}
+    <div className="grid grid-cols-2 gap-3 justify-center">
+      {Array.from({ length: count }).map((_, idx) =>
+        cell(category, idx)
+      )}
+    </div>
+  </section>
+))}
           </div>
         </main>
 
@@ -560,7 +618,8 @@ return (
 
     {/* intake modal */}
     {showIntake && (
-  <Backdrop onClose={() => setShowIntake(false)}>
+  <ModalPortal>
+    <Backdrop onClose={() => setShowIntake(false)}>
     <div
       onClick={(e) => e.stopPropagation()}
       className="bg-white rounded-lg p-6 w-[28rem] space-y-4 relative"
@@ -575,64 +634,65 @@ return (
 
       <h2 className="text-lg font-bold">New Client Plan</h2>
 
-      {/* first-name input */}
+{/* ───────── first-name input ───────── */}
+<input
+  ref={firstRef}
+  defaultValue={firstCache.current}                /* uncontrolled — keeps focus */
+  onInput={e => { firstCache.current = e.currentTarget.value }}
+  className="w-full border p-2 rounded bg-white"
+  placeholder="First name"
+/>
+
+{/* ───────── optimisation check-boxes ───────── */}
+<div className="grid grid-cols-3 gap-3 text-sm mt-2">
+  {OPT_LIST.map(opt => (
+    <label
+      key={opt}
+      className="flex items-center gap-1 whitespace-normal break-words
+                 leading-tight text-xs max-w-[7rem]"
+    >
       <input
-        ref={firstRef}
-        autoFocus
-        value={first}
-        onChange={(e) => setFirst(e.target.value)}
-        className="w-full border p-2 rounded bg-white"
-        placeholder="First name"
+        type="checkbox"
+        onPointerDown={blurKbBeforeCheckbox}           /* hide keyboard first */
+        checked={opts.includes(opt)}
+        onChange={e =>
+          setOpts(prev =>
+            e.target.checked
+              ? [...prev, opt]
+              : prev.filter(x => x !== opt)
+          )
+        }
       />
+      {opt}
+    </label>
+  ))}
+</div>
 
-      {/* optimisation check-boxes */}
-      <div className="grid grid-cols-3 gap-3 text-sm">
-        {OPT_LIST.map((opt) => (
-          <label
-            key={opt}
-            className="flex items-center gap-1 whitespace-normal break-words leading-tight text-xs max-w-[7rem]"
-          >
-            <input
-              type="checkbox"
-              checked={opts.includes(opt)}
-              onChange={(e) => {
-                blurActiveInput();                       // ① hide keyboard
-                setOpts((p) =>                           // ② update list
-                  e.target.checked ? [...p, opt] : p.filter((x) => x !== opt)
-                );
-              }}
-            />
-            {opt}
-          </label>
-        ))}
-      </div>
+{/* ───────── note textarea ───────── */}
+<textarea
+  ref={noteRef}
+  defaultValue={noteCache.current}
+  onInput={e => { noteCache.current = e.currentTarget.value }}
+  rows={3}
+  placeholder="Session note (optional)…"
+  className="w-full border p-2 rounded resize-none text-sm"
+/>
 
-      {/* ── NOTE textarea (new) ── */}
-      <textarea
-        ref={noteRef}
-        defaultValue={noteCache.current}             // repopulate if the element remounts
-        onChange={(e) => {                           // keep cache up-to-date
-          noteCache.current = e.target.value;
-        }}
-        rows={3}
-        placeholder="Session note (optional)…"
-        className="w-full border p-2 rounded resize-none text-sm"
-      />
-
-      {/* create-plan button */}
-      <button
-        disabled={!first.trim() || opts.length === 0}
-        onClick={submitPlan}
-        className={`w-full py-2 rounded text-white ${
-          !first.trim() || opts.length === 0
-            ? 'bg-emerald-400 opacity-50'
-            : 'bg-emerald-600 hover:bg-emerald-700'
-        }`}
-      >
-        Create Plan
-      </button>
+{/* ───────── create-plan button ───────── */}
+<button
+  disabled={createDisabled}
+  onClick={submitPlan}
+  className={`w-full py-2 rounded text-white mt-4 ${
+    createDisabled
+      ? 'bg-emerald-400 opacity-50'
+      : 'bg-emerald-600 hover:bg-emerald-700'
+  }`}
+>
+  Create Plan
+</button>
     </div>
   </Backdrop>
+  </ModalPortal>
 )}
 
 {/* ───────── note viewer ───────── */}
@@ -696,6 +756,8 @@ return (
   </Backdrop>
 )}
 
+
+
 {/* ───────── plan editor ───────── */}
 {editing && (
   <Backdrop onClose={() => setEditing(null)}>
@@ -708,28 +770,33 @@ return (
 
     {/* manual-timer modal */}
     {manual && (
-      <Backdrop onClose={() => setManual(null)}>
-        <div
-          onClickCapture={(e) => e.stopPropagation()}
-          className="relative bg-white rounded-lg p-6 space-y-4"
+  <ModalPortal>
+    {/* backdrop */}
+    <Backdrop onClose={() => setManual(null)}>
+      <div
+        onClick        ={e => e.stopPropagation()}  // keep clicks inside
+        className="relative bg-white rounded-lg p-6 space-y-4 z-[70]"  // <- higher than backdrop
+      >
+        <button
+          onClick={() => setManual(null)}
+          className="absolute top-2 right-3 text-xl leading-none"
         >
-          <button
-            onClick={() => setManual(null)}
-            className="absolute top-2 right-3 text-xl leading-none"
-          >
-            ×
-          </button>
-          <h3 className="font-semibold text-sm">Custom minutes</h3>
-          <DurationPicker
-            defaultMin={10}
-            onChange={(sec) => {
-              start(manual.c, manual.i, 'MT', manual.cid, sec);
-              setManual(null);
-            }}
-          />
-        </div>
-      </Backdrop>
-    )}
+          ×
+        </button>
+
+        <h3 className="font-semibold text-sm">Custom minutes</h3>
+
+        <DurationPicker
+          defaultMin={10}
+          onChange={sec => {                     // sec === minutes * 60
+            start(manual.c, manual.i, 'MT', manual.cid, sec);
+            setManual(null);                    // close after starting
+          }}
+        />
+      </div>
+    </Backdrop>
+  </ModalPortal>
+)}
 
     {/* toast */}
     {err && <Toast msg={err} />}

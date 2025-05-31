@@ -1,7 +1,8 @@
 // components/ClientCard.tsx
 import React from 'react';
 import { PlanClient, Map } from '../types';   //  ⬅ see step 2
-import { CAPACITY }  from '../src/lib/layout';               // 🔝 add at top
+import { CAPACITY }  from '../src/lib/layout';  
+import { KEY_TO_LABEL } from '../src/lib/constants';             // 🔝 add at top
 
 /* helper ─ 00:00 formatter (same logic Board uses) */
 const pad   = (n: number) => n.toString().padStart(2, '0');
@@ -78,7 +79,8 @@ export default function ClientCard({
                   s.status === 'ACTIVE' ? 'bg-orange-50'
                 : s.status === 'DONE'   ? 'bg-emerald-50' : ''}`}>
               <span className={s.status === 'ACTIVE' ? 'font-semibold' : ''}>
-                {s.modality}{s.status !== 'DONE' && free !== total && ` (${free})`}
+              {KEY_TO_LABEL[s.modality] ?? s.modality}
+                 {s.status !== 'DONE' && free !== total && ` (${free})`}
               </span>
               <span>
                 {s.status === 'PENDING' && '•'}

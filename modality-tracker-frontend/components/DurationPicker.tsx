@@ -19,6 +19,7 @@ export default function DurationPicker({ defaultMin, onChange }: Props) {
       <input
         autoFocus
         type="number"
+        name="minutes" 
         min={1}
         placeholder="min"
         className="w-16 rounded border px-1 py-0.5 text-center"
