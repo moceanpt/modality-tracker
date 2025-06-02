@@ -15,8 +15,9 @@ export default function PlanEditorModal({
     .filter(s => s.status === 'PENDING')
     .map(s => s.modality);
 
-  const [checked, setChecked] = useState<string[]>(initialPending);
-  const [saving , setSaving ] = useState(false);
+    const [checked, setChecked] = useState<string[]>(initialPending);
+    const [note   , setNote   ] = useState(client.note ?? '');
+    const [saving , setSaving ] = useState(false);
 
  /* ─── helper: hide keyboard unless it’s the “name” input we still need ─── */
 const blurIfNotNameInput = (skipEl?: HTMLElement | null) => {
@@ -43,7 +44,12 @@ const save = async () => {
     }
   
     const url  = `${API}/plan`;
-    const body = { clientId: client.id, add, remove };
+    const body = {
+      clientId: client.id,
+      add,
+      remove,
+      note: note,               // 👈 editable note
+    };
   
     try {
       const res = await fetch(url, {
@@ -80,14 +86,9 @@ const save = async () => {
 
       <h2 className="text-lg font-bold">{client.name}</h2>
 
-      {client.note && (
-        <div className="bg-yellow-50 border border-yellow-300 p-3 rounded text-sm whitespace-pre-wrap">
-          {client.note}
-        </div>
-      )}
-
-      {/* optimisation list */}
-      <div className="grid grid-cols-2 gap-3 text-xs">
+     
+      {/* optimisation grid – identical to intake  */}
+      <div className="grid grid-cols-3 gap-3 text-xs">
   {OPT_LIST.map(opt => {
     const step = client.steps.find(s => s.modality === opt);
     const status   = step?.status;                 // PENDING | ACTIVE | DONE | undefined
@@ -122,6 +123,15 @@ const save = async () => {
     );
   })}
 </div>
+
+{/* ── Note textarea (editable) ── */}
+<textarea
+  value={note}
+  onChange={e => setNote(e.target.value)}
+  rows={3}
+  placeholder="Session note (optional)…"
+  className="w-full border p-2 rounded resize-none text-sm"
+/>
 
       <button
         disabled={saving}

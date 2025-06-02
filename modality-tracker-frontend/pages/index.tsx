@@ -133,8 +133,7 @@ export default function Board() {
   const [opts,       setOpts      ] = useState<string[]>([]);
 
   /* enable / disable the Create-Plan button */
-  const createDisabled =
-  firstCache.current.trim() === '' || opts.length === 0;
+  const createDisabled = firstCache.current.trim() === '';
 
   /* ------------- misc modal state ------------- */
   const [noteView,   setNoteView  ] = useState<string | null>(null);
