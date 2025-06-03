@@ -145,6 +145,20 @@ export default function Board() {
   const [editing,    setEditing   ] = useState<PlanClient | null>(null);
   const [confirmEnd, setConfirmEnd] = useState<PlanClient | null>(null);
 
+/* ---- alert queue ---- */
+type Alert = { id: string; msg: string };   // id = `${cat}-${idx}`
+const [alerts, setAlerts] = useState<Alert[]>([]);
+
+/* auto-dismiss banners after 8 s */
+//useEffect(() => {
+//  if (!alerts.length) return;                    // nothing queued
+//  const timer = setTimeout(
+//    () => setAlerts(a => a.slice(1)),            // drop the oldest
+//    8000                                         // 8-second lifetime
+//  );
+//  return () => clearTimeout(timer);              // cleanup
+//}, [alerts]);
+
   /* ------------- misc refs & helpers ---------- */
   const noteRef   = useRef<HTMLTextAreaElement>(null);
   const noteCache = useRef('');           // keeps the textarea’s draft
@@ -261,6 +275,15 @@ useEffect(() => {
           if (left <= 0) {
             cell.left = 0;
             cell.done = true;
+          
+          // 📣 enqueue a “finished” popup exactly once
+            const alertId = `${cat}-${idx}`;
+            setAlerts(q =>
+              q.some(a => a.id === alertId)
+                ? q                           // already queued
+                : [...q, { id: alertId, msg: `${cell.clientName} finished ${cat}` }]
+            )
+          
           } else {
             cell.left = left;
           }
@@ -506,6 +529,41 @@ function useStickyState<T>(key: string, initial: T): [T, (v: T) => void] {
  /* ═══ UI ═══ */
 return (
   <>
+ 
+    {/* 🚨 finished-session pop-up */}
+    {alerts.length > 0 && (
+  <div
+    className="
+      fixed top-4 right-4 z-[70]
+      flex flex-col items-end space-y-3
+    "
+  >
+    {alerts.map(a => (
+      <div
+        key={a.id}
+        className="
+          w-64                       /* equal width → neat column */
+          bg-amber-100 border border-amber-300
+          rounded p-3 shadow flex items-center gap-3
+        "
+      >
+        <span className="flex-1 text-sm font-semibold">{a.msg}</span>
+
+        {/* dismiss button */}
+        <button
+          onClick={() => setAlerts(q => q.filter(x => x.id !== a.id))}
+          className="
+            px-2 py-1 text-xs
+            bg-amber-300 hover:bg-amber-400
+            rounded"
+        >
+          OK
+        </button>
+      </div>
+    ))}
+  </div>
+)}
+
     {/* ───────── phone (< 640 px) ───────── */}
     {!isDesktop && (
   <div className="p-3 space-y-6">
