@@ -122,7 +122,7 @@ export default function Board() {
   /* board state */
   const [data,    setData   ] = useState<Map>({});
   const [pick,    setPick   ] = useState<{ c: string; i: number } | null>(null);
-  const [manual,  setManual ] = useState<{ c: string; i: number; cid: string } | null>(null);
+  const [manual,  setManual ] = useState<{ c: string; i: number; cid: string; t: 'MT'|'OP'  } | null>(null);
 
   /* plan list */
   const [clients, setClients] = useState<PlanClient[]>([]);
@@ -159,7 +159,7 @@ useEffect(() => {
 
   /* ---- register listeners ---- */
   socket.on('station:update', ({ category, index, data }: any) => {
-    if (modalOpen()) return;    
+    // if (modalOpen()) return;    
     setData(p => ({                           // ← just use the plain setter
         ...p,
         [category]: { ...(p[category] ?? {}), [index]: data },
@@ -189,11 +189,13 @@ useEffect(() => {
             );
     
             /* keep our ticking countdown */
-            if (oldStep?.status === 'ACTIVE') {
-              return freshStep.status === 'ACTIVE'
-                ? oldStep          // still running → keep local copy
-                : freshStep;       // server switched to DONE → accept it
-            }
+            if (
+                            oldStep?.status   === 'ACTIVE' &&
+                            freshStep.status  === 'ACTIVE' &&
+                            oldStep.left      === freshStep.left   // 👈 same remaining sec?
+                          ) {
+                            return { ...freshStep, left: oldStep.left };
+                          }
     
             /* for all non-ACTIVE rows just take the server version */
             return freshStep;
@@ -293,6 +295,12 @@ if (!mounted) return null;
     clients.some((cl) => cl.id === cid && cl.steps.some((s) => s.status === 'ACTIVE'));
 
   const firstWaitingClientId = (mod: string) => queueFor(mod)[0]?.id;
+
+  function activeClientIdFor(cat: string): string | undefined {
+    return clients.find(
+      cl => cl.steps.some(s => s.modality === cat && s.status === 'ACTIVE')
+    )?.id;
+  }
 
   /* ─── socket emits ─── */
 const start = (
@@ -432,16 +440,39 @@ const cell = (c: string, i: number) => {
         {done && <span className="text-sm font-semibold">DONE</span>}
       </button>
   
-      {st && (
-        <button
-          onClick={() => stopAck(c, i)}
-          className="absolute -top-2 -right-2 bg-red-700 text-white w-6 h-6 rounded-full"
-        >
-          ×
-        </button>
-      )}
-    </div>
-  );
+      {/* 🛠 adjust-timer button – show only while table is busy */}
+      {busy && (
+  <button
+    title="Adjust time"
+    onClick={() => {
+      const cid = activeClientIdFor(c);
+      if (!cid) return;                    // just in case
+
+      setManual({
+        c,
+        i,
+        cid,
+        t: st!.type as 'MT' | 'OP',        // 👈 keep original type
+      });
+    }}
+    className="absolute -bottom-2 -right-2 bg-gray-700 text-white
+               w-6 h-6 rounded-full text-[10px] leading-none"
+  >
+    🛠
+  </button>
+)}
+
+    {/* existing red × stop button */}
+    {st && (
+      <button
+        onClick={() => stopAck(c, i)}
+        className="absolute -top-2 -right-2 bg-red-700 text-white w-6 h-6 rounded-full"
+      >
+        ×
+      </button>
+    )}
+  </div>
+);
 }
 
 function useStickyState<T>(key: string, initial: T): [T, (v: T) => void] {
@@ -788,7 +819,7 @@ return (
         <DurationPicker
           defaultMin={10}
           onChange={sec => {                     // sec === minutes * 60
-            start(manual.c, manual.i, 'MT', manual.cid, sec);
+            start(manual.c, manual.i, manual.t ?? 'MT', manual.cid, sec);
             setManual(null);                    // close after starting
           }}
         />
@@ -868,7 +899,7 @@ function ManualBtn({ cid }: { cid: string }) {
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (pick) setManual({ ...pick, cid });   // remember table + client
+        if (pick) setManual({ ...pick, cid, t: 'MT' });   // remember table + client
       }}
       className="px-2 py-1 rounded border text-xs disabled:opacity-40"
     >

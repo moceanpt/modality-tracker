@@ -202,20 +202,59 @@ socket.on(
     ack?: (r: { ok: boolean; msg?: string }) => void,
   ) => {
     try {
+  /* 0️⃣  first check if this table already has an ACTIVE step
+             → we only need to tweak its timer */
+             const st = await prisma.station.findFirst({ where: { category, index } });
+             if (!st) { ack?.({ ok:false, msg:'Station not found' }); return; }
+       
+             const active = await prisma.sessionStep.findFirst({
+               where   : { stationId: st.id, status: StepStatus.ACTIVE },
+               include : { session: { include: { client: true } } },
+             });
+       
+             if (active) {
+               /* same table already running — just update duration (+ restart clock) */
+               const dur      = durationSec ?? mins(category, type)! * 60; // seconds
+               const newStart = new Date();
+       
+               await prisma.sessionStep.update({
+                 where : { id: active.id },
+                 data  : { duration: dur, startAt: newStart },
+               });
+       
+               /* broadcast fresh values */
+               io.emit('station:update', {
+                 category,
+                 index,
+                 data: {
+                   type,
+                   startAt : newStart.toISOString(),
+                   duration: dur,
+                   clientName: active.session.client.firstName,
+                 },
+               });
+       
+               io.emit(
+                 'plan:update',
+                 (await getTodayPlans()).find(p => p.id === active.session.client.id),
+               );
+       
+               ack?.({ ok:true });
+               return;                // ⬅️ STOP here – skip the normal activation path
+             }
+
       /* 1️⃣  guard-rail: only one active optimisation per client */
       if (clientId) {
         const another = await prisma.sessionStep.findFirst({
-          where: {
-            status: StepStatus.ACTIVE,
-            session: { clientId },
-          },
+          where: { status: StepStatus.ACTIVE, session: { clientId } },
         });
-        if (another) throw new Error('Client already in another optimisation');
+        if (another)
+          throw new Error('Client already in another optimisation');
       }
 
       /* 2️⃣  locate station */
-      const st = await prisma.station.findFirst({ where: { category, index } });
-      if (!st) throw new Error('Station not found');
+      // const st = await prisma.station.findFirst({ where: { category, index } });
+      // if (!st) throw new Error('Station not found');
 
       /* 3️⃣  work out duration */
       const fallbackMin = mins(category, type);          // minutes or null
@@ -225,8 +264,43 @@ socket.on(
       const dur = durationSec ?? fallbackMin! * 60;      // seconds
 
       /* 4️⃣  claim the next pending step (before locking station) */
-      const step = await getNextPendingStep(st.modalityId!, type, clientId);
-      if (!step) throw new Error('No pending step');
+      let step = await getNextPendingStep(st.modalityId!, type, clientId);
+
+if (!step) {
+  /* ── adjust-timer path: tweak the current ACTIVE step ── */
+  step = await prisma.sessionStep.findFirst({
+    where   : { stationId: st.id, status: StepStatus.ACTIVE },
+    include : { session: { include: { client: true } } },
+  });
+  if (!step) throw new Error('No pending or active step');
+
+  /* 🔸 reset BOTH duration and startAt */
+  const newStart = new Date();
+
+  await prisma.sessionStep.update({
+    where: { id: step.id },
+    data : { duration: dur, startAt: newStart },
+  });
+
+  /* broadcast fresh values */
+io.emit('station:update', {
+  category,
+  index,
+  data: {
+    type,
+    startAt : newStart.toISOString(),
+    duration: dur,
+    clientName: active!.session.client.firstName,      //  ← add !
+  },
+});
+
+const snap = (await getTodayPlans())
+               .find(p => p.id === active!.session.client.id); // ← add !
+if (snap) io.emit('plan:update', snap);
+
+ack?.({ ok: true });
+return;                       // ← skip normal activation
+}
 
       /* 5️⃣  lock station + mark step ACTIVE in a single await chain */
       await prisma.$transaction([
