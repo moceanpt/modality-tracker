@@ -130,10 +130,15 @@ export default function Board() {
   /* intake form ---------------------------------------------------- */
   const [showIntake, setShowIntake] = useState(false);
   const [first,      setFirst     ] = useState('');          // controlled text field
-  const [opts,       setOpts      ] = useState<string[]>([]);
+  const [opts,   setOpts  ] = useState<string[]>([]);
+  const [badge,  setBadge ] = useState(false);              // 🎖️ checkbox
 
   /* enable / disable the Create-Plan button */
-  const createDisabled = firstCache.current.trim() === '';
+  const createDisabled =
+   firstCache.current.trim() === '' ||           // need a name
+   (!badge && opts.length === 0);                // need either 🎖️ or an optim
+  
+
 
   /* ------------- misc modal state ------------- */
   const [noteView,   setNoteView  ] = useState<string | null>(null);
@@ -398,6 +403,7 @@ async function submitPlan() {
   firstCache.current = '';   // clear name box
   setOpts([]);               // clear ticks
   setShowIntake(false);
+  setBadge(false);  
 }
 
   /* ─── render helpers ─── */
@@ -662,7 +668,22 @@ return (
         ×
       </button>
 
-      <h2 className="text-lg font-bold">New Client Plan</h2>
+      {/* ── title + badge (no label text) ── */}
+<div className="flex items-center justify-between">
+  <h2 className="text-lg font-bold">New Client Plan</h2>
+
+  {/* icon-only checkbox */}
+  <label className="flex items-center">
+    <input
+      type="checkbox"
+      checked={badge}
+      onChange={e => setBadge(e.target.checked)}
+      aria-label="Quick check-in"     /* keeps it accessible */
+      className="mr-1"
+    />
+    <span aria-hidden>🎖️</span>
+  </label>
+</div>
 
 {/* ───────── first-name input ───────── */}
 <input
@@ -697,6 +718,7 @@ return (
     </label>
   ))}
 </div>
+
 
 {/* ───────── note textarea ───────── */}
 <textarea
